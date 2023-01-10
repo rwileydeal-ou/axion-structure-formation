@@ -1,6 +1,7 @@
 from textwrap import dedent
 import numpy as np
 from scipy.integrate import odeint
+import scipy.special
 
 # declare static global variables here
 mPlanck = 2.4e18
@@ -11,20 +12,34 @@ mPlanck = 2.4e18
 
 # this method computes axion mass based on current temperature (in GeV) and axion decay constant (in GeV)
 def axionMass(fa, temp):
-    m = ( 0.078 )**2. / fa
+    m = np.power(0.078, 2.) / fa
 
     if (temp <= 0.2 ):
         return m
     elif ( temp > 0.2 and temp <= 1. ):
-        return ( (0.2 / temp)**6.5 * m )
+        return ( np.power(0.2 / temp, 6.5) * m )
     elif ( temp > 1. ):
-        return ( (0.2 / temp)**4. * 0.018 * m )
-
+        return ( np.power(0.2 / temp, 4.) * 0.018 * m )
     raise ValueError("No valid axion mass scenario!")
 
 # this method computes dm_ax / dN utilizing a numerical approximation as described in notes
-def axionMassDerivative():
-    return 0.
+def axionMassDerivative( temp, fa, rhoRad, dRhoRad ):
+    # if T < 0.2 GeV, mass is constant - no point in continuing 
+    if (temp <= 0.2 ):
+        return 0.
+
+    # otherwise, first compute the dT/dN term
+    dTdN = 0.25 * temp * ( dRhoRad / rhoRad )
+
+    # now we can use the expression in the notes to compute prefactor of dm/dN
+    dmdN = dTdN * np.power(0.078, 2.) / fa
+
+    # finally, factor in temperature dependent cases
+    if ( temp > 0.2 and temp <= 1. ):
+        return ( - 6.5 / temp * np.power(0.2 / temp, 6.5) * dmdN )
+    elif ( temp > 1. ):
+        return ( - 4. / temp * np.power(0.2 / temp, 4.) * 0.018 * dmdN )
+    raise ValueError("No valid axion mass scenario!")
 
 # this method retrieves gstar from file for specified temperature
 # if temperature does not match exact entry, interpolates between two nearest neighbors
@@ -36,13 +51,13 @@ def readGstarFromCSV( gstarCsvFile, temp ):
 def temperature( rhoRadiation, gstarCsvFile ):
     gstarGuess = 100.
 
-    temp0 = ( 30. * rhoRadiation / ( gstarGuess * np.Pi**2. ))**(1./4.)
+    temp0 = np.power( 30. * rhoRadiation / ( gstarGuess * np.power(np.Pi, 2.) ), 0.25 )
     temp1 = 0.
     deltaTemp = 0.
 
     while ( np.abs( temp0 - temp1 ) / temp0 > 0.01 ):
         gstr = readGstarFromCSV( gstarCsvFile, temp0 )
-        temp1 = ( 30. * rhoRadiation / ( gstr * np.Pi**2. ))**(1./4.)
+        temp1 = np.power( 30. * rhoRadiation / ( gstr * np.power(np.Pi, 2.) ), 0.25 )
 
         if ( np.abs( temp0 - temp1) == deltaTemp ):
             temp0 = ( temp0 + temp1 ) / 2.
@@ -52,11 +67,25 @@ def temperature( rhoRadiation, gstarCsvFile ):
 
     return temp1
 
-# this method calculates nEquilibrium for WIMP
-def compute_nEquilibrium():
-    nEq = 0.
+# this method calculates rhoEquilibrium for WIMP
+# see e.g. Eq.A.8 in arXiv: 1110.2491
+def compute_rhoEquilibrium( temp, mChi ):
+    g = 2
 
-    return nEq
+    if ( temp <= mChi / 10. ):
+        # non-relativistic limit
+        neq = g * np.power( mChi * temp / (2. * np.pi), 1.5 ) * np.exp( - mChi / temp )
+        return neq * mChi
+    elif ( temp < 1.5 * mChi and temp > mChi / 10. ):
+        # intermediate regime
+        neq = g * np.power(mChi, 2.) * temp * scipy.special.kn(2, mChi / temp) / ( 2. * np.power(np.pi, 2.) )
+        f1 = mChi * scipy.special.kn(1, mChi / temp) / scipy.special.kn(2, mChi / temp)
+        f2 = 3. * temp 
+        return neq * ( f1 + f2 )
+    elif ( temp >= 1.5 * mChi  ):
+        # relativistic limit 
+        return g * 7./8. * np.power(np.pi, 2.) / 30. * np.power( temp, 4. )
+
 
 def build_modulus_energyDensity_eqn( rhoPhi, H, GammaPhi, mPhi ):
     # if 3H >~ m, modulus oscillations have not begun yet - return 0 since still frozen
@@ -72,7 +101,7 @@ def build_WIMP_energyDensity_eqn( rhoPhi, rhoChi, H, rhoEquilChi, sigVChi, mChi,
     # hubble dilution
     dEdN = -3. * rhoChi 
     # annihilations
-    dEdN -= ( rhoChi**2. - rhoEquilChi**2. ) * sigVChi / ( H * mChi ) 
+    dEdN -= ( np.power(rhoChi, 2.) - np.power(rhoEquilChi, 2.) ) * sigVChi / ( H * mChi ) 
     # injections
     dEdN += GammaPhi * rhoPhi * BrPhiWIMP / H 
     return dEdN
@@ -89,14 +118,14 @@ def build_radiation_energyDensity_eqn( rhoPhi, rhoChi, rhoRad, H, rhoEquilChi, s
     # hubble dilution
     dEdN = -4. * rhoRad
     # annihilations 
-    dEdN += ( rhoChi**2. - rhoEquilChi**2. ) * sigVChi / ( mChi * H )
+    dEdN += ( np.power(rhoChi, 2.) - np.power(rhoEquilChi, 2.) ) * sigVChi / ( mChi * H )
     # decays
     dEdN += GammaPhi * rhoPhi * ( 1. - BrPhiWIMP ) / H
     return dEdN
 
 def build_hubble_eqn( rhoPhi, rhoChi, nAx, rhoRad, H, mAxion, dmAxdN ):
     dHdN = 0.
-    dHdN -= ( rhoPhi + rhoChi + nAx * mAxion + 4./3. * rhoRad - 1./3. * dmAxdN * nAx ) / ( 2. * H * mPlanck**2. )
+    dHdN -= ( rhoPhi + rhoChi + nAx * mAxion + 4./3. * rhoRad - 1./3. * dmAxdN * nAx ) / ( 2. * H * np.power(mPlanck, 2.) )
     return dHdN
 
 
@@ -111,14 +140,18 @@ def compute_zerothOrder_initialConditions():
 
 
 # this helper method computes the zeroth order Boltzmann equations
-def build_zerothOrder_equations( rhoPhi, rhoChi, nAx, rhoRad, H, sigVChi, mChi, GammaPhi, BrPhiWIMP, mPhi, mAxion, dmAxdN ):
+def build_zerothOrder_equations( rhoPhi, rhoChi, nAx, rhoRad, H, sigVChi, mChi, GammaPhi, BrPhiWIMP, mPhi, mAxion, temp, fa ):
     
-    rhoEquilChi = 0.
+    rhoEquilChi = compute_rhoEquilibrium(temp, mChi)
 
     dRhoPhi = build_modulus_energyDensity_eqn( rhoPhi, H, GammaPhi, mPhi )
     dRhoChi = build_WIMP_energyDensity_eqn( rhoPhi, rhoChi, H, rhoEquilChi, sigVChi, mChi, GammaPhi, BrPhiWIMP )
     dnAx = build_axion_numberDensity_eqn( nAx, mAxion, H )
     dRhoRad = build_radiation_energyDensity_eqn( rhoPhi, rhoChi, rhoRad, H, rhoEquilChi, sigVChi, mChi, GammaPhi, BrPhiWIMP )
+
+    # need dRho/dN to compute dmAx / dN (see notes)
+    dmAxdN = axionMassDerivative(temp, fa, rhoRad, dRhoRad)
+
     dHubble = build_hubble_eqn( rhoPhi, rhoChi, nAx, rhoRad, H, mAxion, dmAxdN )
 
     return[ dRhoPhi, dRhoChi, dnAx, dRhoRad, dHubble ]
@@ -144,13 +177,11 @@ def build_Boltzmann_Equations( eqns, N, sigVChi, mChi, GammaPhi, BrPhiWIMP, gsta
     temp = temperature( rhoRadiation=rhoRad, gstarCsvFile=gstarCsvFile )
     # compute axion mass
     mAxion = axionMass( fa=fa, temp=temp )
-    # estimate dm_ax / dN
-    dmAxdN = axionMassDerivative()
 
     if H == 0.:
         raise ValueError("Vanishing Hubble parameter!")
 
-    zerothOrderEqns = build_zerothOrder_equations( rhoPhi, rhoChi, nAx, rhoRad, H, sigVChi, mChi, GammaPhi, BrPhiWIMP, mPhi, mAxion, dmAxdN )
+    zerothOrderEqns = build_zerothOrder_equations( rhoPhi, rhoChi, nAx, rhoRad, H, sigVChi, mChi, GammaPhi, BrPhiWIMP, mPhi, mAxion, temp, fa )
     
     # TODO: add in the first order eqns
 
