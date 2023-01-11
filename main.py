@@ -4,12 +4,18 @@ import numpy as np
 from scipy.integrate import odeint
 import scipy.special
 
+
+
 # declare static global variables here
 mPlanck = 2.4e18
+
+
+
 
 ################################################################
 #                        Helper classes                        #
 ################################################################
+
 
 @dataclasses.dataclass 
 class InputData:
@@ -19,6 +25,7 @@ class InputData:
     decayWidth_Modulus: float
     branchRatio_ModulusToWIMP: float
     fa: float
+    temp_Reheat: float
 
 @dataclasses.dataclass
 class EnergyDensities:
@@ -30,9 +37,12 @@ class EnergyDensities:
     rhoEQ_WIMP: float = 0.
 
 
+
+
 ################################################################
 #               Primative helper functions                     #
 ################################################################
+
 
 # this method computes axion mass based on current temperature (in GeV) and axion decay constant (in GeV)
 def axionMass(fa, temp):
@@ -184,13 +194,78 @@ def build_hubble_eqn( energyDensities, mass_Axion, dmAxdN ):
 
 
 
+
 ################################################################
-#                 Wrapped helper functions                     #
+#        Wrapped helper functions - Initial Conditions         #
 ################################################################
 
+def compute_hubble_initialCondition( 
+    inputData,
+    gstar
+):
+    hubble0 = np.sqrt(
+        np.power( np.pi, 2. ) * gstar / 90.
+    ) * np.power( inputData.temp_Reheat, 2. ) / mPlanck
+    return hubble0
 
-def compute_zerothOrder_initialConditions():
+def compute_radiation_initialCondition(
+    inputData,
+    gstar
+):
+    rho0_Rad = np.power( np.pi, 2. ) * gstar * np.power( inputData.temp_Reheat, 4. ) / 30.
+    return rho0_Rad
+
+def compute_modulus_initialCondition(
+    inputData,
+    gstar
+):
+    return 0.
+
+def compute_axion_initialCondition(
+    inputData,
+    gstar
+):
+    return 0.
+
+def compute_zerothOrder_initialConditions(
+    inputData,
+    gstarCsvFile
+):
+    # read gstar once
+    gstar = readGstarFromCSV( gstarCsvFile=gstarCsvFile, temp=inputData.temp_Reheat )
+
+    hubble0 = compute_hubble_initialCondition( inputData=inputData, gstar=gstar )
+    rho0_Radiation = compute_radiation_initialCondition( inputData=inputData, gstar=gstar )
+
+    # for cases of interest, WIMP starts in equilibrium - just calculate rho_EQ at TR
+    rho0_WIMP = compute_rhoEquilibrium( temp=inputData.temp_Reheat, mass_WIMP=inputData.mass_WIMP )
+
+    rho0_Modulus = compute_modulus_initialCondition( inputData=inputData, gstar=gstar )
+    n0_Axion = compute_axion_initialCondition( inputData=inputData, gstar=gstar )
+
+    return [rho0_Modulus, rho0_WIMP, n0_Axion, rho0_Radiation, hubble0]
+
+def compute_firstOrder_initialConditions():
     return[]
+
+
+# this method computes the full set of initial conditions
+def computeInitialConditions(
+    inputData,
+    gstarCsvFile
+):
+    zerothOrderY0 = compute_zerothOrder_initialConditions( inputData=inputData )
+
+    # TODO: add in the first order eqns
+
+    return zerothOrderY0
+
+
+
+
+################################################################
+#         Wrapped helper functions - Equation Builders         #
+################################################################
 
 
 # this helper method computes the zeroth order Boltzmann equations
@@ -212,18 +287,13 @@ def build_zerothOrder_equations(
 
     return[ dRhoPhi, dRhoChi, dnAx, dRhoRad, dHubble ]
 
-def compute_firstOrder_initialConditions():
-    return[]
-
 # this helper method computes the first order Boltzmann equations
 def build_firstOrder_equations():
     return[]
 
-
 # this method computes the full set of Boltzmann equations
 # "eqns" parameter is array containing numerical RHS of Boltz eqns
 # "N" is number of e-folds
-# 
 def build_Boltzmann_Equations( 
     eqns, 
     N, 
@@ -266,17 +336,6 @@ def build_Boltzmann_Equations(
 
     return zerothOrderEqns
 
-# this method computes the full set of initial conditions
-def computeInitialConditions():
-    zerothOrderY0 = compute_zerothOrder_initialConditions()
-
-    # TODO: add in the first order eqns
-
-    return zerothOrderY0
-
-
-
-
 
 
 
@@ -296,19 +355,23 @@ def solveBoltzmannEquations(  ):
     # define number of e-folds
     N = np.linspace(0,20,100)
 
-    # define initial conditions
-    y0 = computeInitialConditions()
-
     gstarCsvFile = "mssm_gstar.csv"
     
-
+    # NOTE: ALL DIMENSIONFUL VALUES SHOULD HAVE BASE UNITS OF GEV
     inputData = InputData( 
         mass_Modulus=5.e6, 
         mass_WIMP=200., 
         crossSection_WIMP=1.93e-08,
         decayWidth_Modulus = 1e-25,
         branchRatio_ModulusToWIMP = 0.2,
-        fa = 1e11
+        fa = 1e11,
+        temp_Reheat=1e12
+    )
+
+    # define initial conditions
+    y0 = computeInitialConditions( 
+        inputData=inputData,
+        gstarCsvFile=gstarCsvFile
     )
 
     sol = odeint( 
