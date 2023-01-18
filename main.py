@@ -1,5 +1,6 @@
 import dataclasses
 from textwrap import dedent
+import matplotlib as mpl
 import numpy as np
 from scipy.integrate import odeint
 import scipy.special
@@ -85,13 +86,13 @@ def readGstarFromCSV( gstarCsvFile, temp ):
 def temperature( rho_Radiation, gstarCsvFile ):
     gstarGuess = 100.
 
-    temp0 = np.power( 30. * rho_Radiation / ( gstarGuess * np.power(np.Pi, 2.) ), 0.25 )
+    temp0 = np.power( 30. * rho_Radiation / ( gstarGuess * np.power(np.pi, 2.) ), 0.25 )
     temp1 = 0.
     deltaTemp = 0.
 
     while ( np.abs( temp0 - temp1 ) / temp0 > 0.01 ):
         gstr = readGstarFromCSV( gstarCsvFile, temp0 )
-        temp1 = np.power( 30. * rho_Radiation / ( gstr * np.power(np.Pi, 2.) ), 0.25 )
+        temp1 = np.power( 30. * rho_Radiation / ( gstr * np.power(np.pi, 2.) ), 0.25 )
 
         if ( np.abs( temp0 - temp1) == deltaTemp ):
             temp0 = ( temp0 + temp1 ) / 2.
@@ -154,12 +155,12 @@ def build_WIMP_energyDensity_eqn( inputData, energyDensities ):
     dEdN += decayWidth_Modulus * rho_Modulus * branchRatio_ModulusToWIMP / hubble 
     return dEdN
 
-def build_axion_numberDensity_eqn( n_Axion, mass_Axion, hubble ):
+def build_axion_numberDensity_eqn( mass_Axion, energyDensities ):
     # if 3H >~ m(T), axion oscillations have not begun yet - return 0 since still frozen
-    if ( mass_Axion < 3. * hubble ):
+    if ( mass_Axion < 3. * energyDensities.hubble ):
         return 0.
     # hubble dilution 
-    dndN = -3. * n_Axion
+    dndN = -3. * energyDensities.n_Axion
     return dndN
 
 def build_radiation_energyDensity_eqn( inputData, energyDensities ):
@@ -219,7 +220,9 @@ def compute_modulus_initialCondition(
     inputData,
     gstar
 ):
-    return 0.
+    amplitude = mPlanck
+    rho0_mod = 0.5 * np.power( inputData.mass_Modulus * amplitude, 2. )
+    return rho0_mod
 
 def compute_axion_initialCondition(
     inputData,
@@ -254,7 +257,7 @@ def computeInitialConditions(
     inputData,
     gstarCsvFile
 ):
-    zerothOrderY0 = compute_zerothOrder_initialConditions( inputData=inputData )
+    zerothOrderY0 = compute_zerothOrder_initialConditions( inputData=inputData, gstarCsvFile=gstarCsvFile )
 
     # TODO: add in the first order eqns
 
@@ -383,3 +386,7 @@ def solveBoltzmannEquations(  ):
             gstarCsvFile
         ) 
     )
+
+    print(sol)
+
+solveBoltzmannEquations()
