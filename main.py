@@ -1,8 +1,10 @@
+from cmath import nan
 import dataclasses
 from textwrap import dedent
+from turtle import rt
 import matplotlib as mpl
 import numpy as np
-from scipy.integrate import odeint
+from scipy.integrate import ode
 import scipy.special
 
 
@@ -36,6 +38,8 @@ class EnergyDensities:
     n_Axion: float
     hubble: float
     rhoEQ_WIMP: float = 0.
+    isOsc_Modulus: bool = False
+    isOsc_Axion: bool = False
 
 
 
@@ -107,6 +111,9 @@ def temperature( rho_Radiation, gstarCsvFile ):
 def compute_rhoEquilibrium( temp, mass_WIMP ):
     g = 2
 
+    if temp == 0.:
+        return 0.
+    
     if ( temp <= mass_WIMP / 10. ):
         # non-relativistic limit
         neq = g * np.power( mass_WIMP * temp / (2. * np.pi), 1.5 ) * np.exp( - mass_WIMP / temp )
@@ -129,7 +136,7 @@ def build_modulus_energyDensity_eqn( inputData, energyDensities ):
     rho_Modulus = energyDensities.rho_Modulus
 
     # if 3H >~ m, modulus oscillations have not begun yet - return 0 since still frozen
-    if ( mass_Modulus < 3. * hubble ):
+    if not energyDensities.isOsc_Modulus:
         return 0.
     # hubble dilution
     dEdN = -3. * rho_Modulus
@@ -137,7 +144,7 @@ def build_modulus_energyDensity_eqn( inputData, energyDensities ):
     dEdN -= decayWidth_Modulus * rho_Modulus / hubble
     return dEdN
 
-def build_WIMP_energyDensity_eqn( inputData, energyDensities ):
+def build_WIMP_energyDensity_eqn( inputData, energyDensities, temp ):
     crossSection_WIMP = inputData.crossSection_WIMP
     mass_WIMP = inputData.mass_WIMP
     decayWidth_Modulus = inputData.decayWidth_Modulus
@@ -149,10 +156,19 @@ def build_WIMP_energyDensity_eqn( inputData, energyDensities ):
 
     # hubble dilution
     dEdN = -3. * rho_WIMP 
+
     # annihilations
-    dEdN -= ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( hubble * mass_WIMP ) 
-    # injections
-    dEdN += decayWidth_Modulus * rho_Modulus * branchRatio_ModulusToWIMP / hubble 
+    # annihilation term is numerically stiff - but equilibrium is an attractor
+    # make approximation that WIMP is in equilibrium until close to freeze-out, Tf ~ mDM / 20
+    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
+        dEdN -= ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( hubble * mass_WIMP ) 
+    else:
+        # well above freeze-out, wimps relativistic so treat as such
+        dEdN = -4. * rho_WIMP
+
+    # injections - only apply if modulus is oscillating
+    if energyDensities.isOsc_Modulus:
+        dEdN += decayWidth_Modulus * rho_Modulus * branchRatio_ModulusToWIMP / hubble 
     return dEdN
 
 def build_axion_numberDensity_eqn( mass_Axion, energyDensities ):
@@ -163,7 +179,7 @@ def build_axion_numberDensity_eqn( mass_Axion, energyDensities ):
     dndN = -3. * energyDensities.n_Axion
     return dndN
 
-def build_radiation_energyDensity_eqn( inputData, energyDensities ):
+def build_radiation_energyDensity_eqn( inputData, energyDensities, temp ):
     crossSection_WIMP = inputData.crossSection_WIMP
     mass_WIMP = inputData.mass_WIMP
     decayWidth_Modulus = inputData.decayWidth_Modulus
@@ -176,15 +192,19 @@ def build_radiation_energyDensity_eqn( inputData, energyDensities ):
 
     # hubble dilution
     dEdN = -4. * rho_Radiation
-    # annihilations 
-    dEdN += ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( mass_WIMP * hubble )
-    # decays
-    dEdN += decayWidth_Modulus * rho_Modulus * ( 1. - branchRatio_ModulusToWIMP ) / hubble
+
+    # annihilations - again assume WIMP is in equilibrium until close to freeze-out
+    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
+        dEdN += ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( mass_WIMP * hubble )
+
+    # decays - only apply if modulus is oscillating
+    if energyDensities.isOsc_Modulus:
+        dEdN += decayWidth_Modulus * rho_Modulus * ( 1. - branchRatio_ModulusToWIMP ) / hubble
+
     return dEdN
 
 def build_hubble_eqn( energyDensities, mass_Axion, dmAxdN ):
-    dHdN = 0.
-    dHdN -= ( 
+    dHdN = -( 
         energyDensities.rho_Modulus 
         + energyDensities.rho_WIMP 
         + energyDensities.n_Axion * mass_Axion 
@@ -246,7 +266,8 @@ def compute_zerothOrder_initialConditions(
     rho0_Modulus = compute_modulus_initialCondition( inputData=inputData, gstar=gstar )
     n0_Axion = compute_axion_initialCondition( inputData=inputData, gstar=gstar )
 
-    return [rho0_Modulus, rho0_WIMP, n0_Axion, rho0_Radiation, hubble0]
+    return [rho0_Modulus, rho0_WIMP, n0_Axion, rho0_Radiation]
+#    return [rho0_Modulus, rho0_WIMP, n0_Axion, rho0_Radiation, hubble0]
 
 def compute_firstOrder_initialConditions():
     return[]
@@ -279,16 +300,17 @@ def build_zerothOrder_equations(
     temp
 ):
     dRhoPhi = build_modulus_energyDensity_eqn( inputData=inputData, energyDensities=energyDensities )
-    dRhoChi = build_WIMP_energyDensity_eqn( inputData=inputData, energyDensities=energyDensities )
+    dRhoChi = build_WIMP_energyDensity_eqn( inputData=inputData, energyDensities=energyDensities, temp=temp )
     dnAx = build_axion_numberDensity_eqn( mass_Axion, energyDensities=energyDensities )
-    dRhoRad = build_radiation_energyDensity_eqn( inputData=inputData, energyDensities=energyDensities )
+    dRhoRad = build_radiation_energyDensity_eqn( inputData=inputData, energyDensities=energyDensities, temp=temp )
 
     # need dRho/dN to compute dmAx / dN (see notes)
     dmAxdN = axionMassDerivative(temp, inputData.fa, energyDensities.rho_Radiation, dRhoRad)
 
     dHubble = build_hubble_eqn( energyDensities=energyDensities, mass_Axion=mass_Axion, dmAxdN=dmAxdN )
 
-    return[ dRhoPhi, dRhoChi, dnAx, dRhoRad, dHubble ]
+    return[ dRhoPhi, dRhoChi, dnAx, dRhoRad ]
+#    return[ dRhoPhi, dRhoChi, dnAx, dRhoRad, dHubble ]
 
 # this helper method computes the first order Boltzmann equations
 def build_firstOrder_equations():
@@ -298,8 +320,8 @@ def build_firstOrder_equations():
 # "eqns" parameter is array containing numerical RHS of Boltz eqns
 # "N" is number of e-folds
 def build_Boltzmann_Equations( 
-    eqns, 
     N, 
+    eqns, 
     inputData,
     gstarCsvFile
 ):
@@ -308,25 +330,39 @@ def build_Boltzmann_Equations(
 
     # extract densities for modulus, WIMP, axion, and radiation, Hubble parameter, and ... first order ...
     # use axion number density instead of energy density since rho=n*m, but number density does not need numerical calculation of dm/dN
-    rho_Modulus, rho_WIMP, n_Axion, rho_Radiation, hubble = eqns
+#    rho_Modulus, rho_WIMP, n_Axion, rho_Radiation, hubble = eqns
+    rho_Modulus, rho_WIMP, n_Axion, rho_Radiation = eqns
+
+    # check to see if modulus contributes to hubble constant
+    modIsOsc = False
+    hubble = 0.
+    if rho_WIMP is not nan and rho_Radiation is not nan:
+        hubble = np.sqrt( ( rho_WIMP + rho_Radiation ) / 3. ) / mPlanck
+    # if modulus is oscillating, add it to hubble
+    if inputData.mass_Modulus >= 3. * hubble and rho_Modulus > 0. and rho_Modulus is not nan:
+        hubble = np.sqrt( ( rho_Modulus + rho_WIMP + rho_Radiation ) / 3. ) / mPlanck
+        modIsOsc = True
+
     energyDensities = EnergyDensities( 
         rho_Modulus=rho_Modulus,
         rho_WIMP=rho_WIMP,
         rho_Radiation=rho_Radiation,
         n_Axion=n_Axion,
-        hubble=hubble
+        hubble=hubble,
+        isOsc_Modulus=modIsOsc
      )
 
     # with the solution of previous iteration, need to compute required properties for this step
     # compute temperature 
     temp = temperature( rho_Radiation=rho_Radiation, gstarCsvFile=gstarCsvFile )
+
     # compute WIMP equilibrium energy density
     energyDensities.rhoEQ_WIMP = compute_rhoEquilibrium(temp, inputData.mass_WIMP)
     # compute axion mass
     mass_Axion = axionMass( fa=inputData.fa, temp=temp )
 
-    if hubble == 0.:
-        raise ValueError("Vanishing Hubble parameter!")
+#    if hubble <= 0.:
+#        raise ValueError("Invalid Hubble parameter!")
 
     zerothOrderEqns = build_zerothOrder_equations( 
         inputData,
@@ -334,9 +370,15 @@ def build_Boltzmann_Equations(
         mass_Axion, 
         temp
     )
+
+    if rho_WIMP < 0.:
+        print('test')
     
     # TODO: add in the first order eqns
-
+    print(temp)
+    print(N)
+    print( rho_Modulus, rho_WIMP, energyDensities.rhoEQ_WIMP, n_Axion, rho_Radiation, hubble, zerothOrderEqns[0], zerothOrderEqns[1], zerothOrderEqns[2], zerothOrderEqns[3],)
+    print("")
     return zerothOrderEqns
 
 
@@ -355,8 +397,6 @@ def build_Boltzmann_Equations(
 # this method builds and solves the Boltzmann equations
 # initial conditions are assumed to be taken at inflationary reheating
 def solveBoltzmannEquations(  ):
-    # define number of e-folds
-    N = np.linspace(0,20,100)
 
     gstarCsvFile = "mssm_gstar.csv"
     
@@ -365,7 +405,7 @@ def solveBoltzmannEquations(  ):
         mass_Modulus=5.e6, 
         mass_WIMP=200., 
         crossSection_WIMP=1.93e-08,
-        decayWidth_Modulus = 1e-25,
+        decayWidth_Modulus = 1e-22,
         branchRatio_ModulusToWIMP = 0.2,
         fa = 1e11,
         temp_Reheat=1e12
@@ -377,16 +417,39 @@ def solveBoltzmannEquations(  ):
         gstarCsvFile=gstarCsvFile
     )
 
-    sol = odeint( 
-        build_Boltzmann_Equations, 
-        y0, 
-        N, 
-        args=( 
-            inputData,
-            gstarCsvFile
-        ) 
-    )
+    y_solutions = []
+    t_solutions = []
+    def solution_getter(t,y): 
+        t_solutions.append(t)
+        y_solutions.append(y) 
 
-    print(sol)
+
+    backend = "vode"
+    ode_solver = ode(
+        build_Boltzmann_Equations
+    ).set_integrator(
+        backend,
+        max_step = 0.1,
+        rtol = 1e-6,
+        atol = 1e-6,
+        with_jacobian = True
+    ).set_f_params(
+        inputData,
+        gstarCsvFile
+    )
+    ode_solver.set_initial_value(y=y0, t=0.)
+#    ode_solver.set_solout(solution_getter)
+
+    nFin = 50
+    t = np.linspace(0, nFin, 10 * nFin)
+    y = np.zeros((len(t), len(y0)))
+
+    for k in range(1, len(t)):
+        y[k, :] = ode_solver.integrate(t[k])
+        ode_solver.set_initial_value( y[k, :], t[k])
+        print("ASDFASDFASDF")
+        print("")
+
+#    print(y_solutions)
 
 solveBoltzmannEquations()
