@@ -429,7 +429,7 @@ def solveBoltzmannEquations(  ):
         build_Boltzmann_Equations
     ).set_integrator(
         backend,
-        max_step = 0.1,
+        max_step = 0.001,
         rtol = 1e-6,
         atol = 1e-6,
         with_jacobian = True
