@@ -28,6 +28,4 @@ class EnergyDensities:
     n_Axion: float
     hubble: float
     rhoEQ_WIMP: float = 0.
-    isOsc_Modulus: bool = False
-    isOsc_Axion: bool = False
 

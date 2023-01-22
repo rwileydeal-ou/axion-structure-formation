@@ -66,3 +66,8 @@ def compute_equationOfStateWIMP( temp, mass_WIMP ):
         return 1 / ( f1 + f2 )
     elif ( temp >= 1.5 * mass_WIMP  ):
         return 1./3.
+
+def compute_equationOfState_CohOsc( mass, hubble ):
+    if mass < hubble:
+        return -1.
+    return 0.

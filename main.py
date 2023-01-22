@@ -6,7 +6,7 @@ boltzmann.solveBoltzmannEquations(
     mass_WIMP=200., 
     crossSection_WIMP=1.93e-08,
     decayWidth_Modulus = 5e-20,
-    branchRatio_ModulusToWIMP = 0.15,
+    branchRatio_ModulusToWIMP = 0.05,
     fa = 1e11,
     temp_Reheat=1e12,
     gstarCsvFile = "mssm_gstar.csv"

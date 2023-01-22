@@ -49,34 +49,19 @@ def build_Boltzmann_Equations(
     eqns, 
     inputData
 ):
-    if not data.dataclasses.is_dataclass( inputData ):
-        raise TypeError("inputData must be of dataclass type InputData")
-
-    # extract densities for modulus, WIMP, axion, and radiation, Hubble parameter, and ... first order ...
+    # extract densities for modulus, WIMP, axion, and radiation, and ... first order ...
     # use axion number density instead of energy density since rho=n*m, but number density does not need numerical calculation of dm/dN
     rho_Modulus, rho_WIMP, n_Axion, rho_Radiation = eqns
 
-    # check to see if modulus contributes to hubble constant
-    modIsOsc = False
-    hubble = 0.
-    if rho_WIMP is not nan and rho_Radiation is not nan:
-        hubble = np.sqrt( ( rho_Modulus + rho_WIMP + rho_Radiation ) / 3. ) / data.mPlanck
-
-    # if modulus is oscillating, add it to hubble
-    if inputData.mass_Modulus >= hubble and rho_Modulus > 0. and rho_Modulus is not nan:
-        modIsOsc = True
-
-    if rho_WIMP < 0.:
-        raise ValueError("Bad WIMP convergence")
+    hubble = np.sqrt( ( rho_Modulus + rho_WIMP + rho_Radiation ) / 3. ) / data.mPlanck
 
     energyDensities = data.EnergyDensities( 
         rho_Modulus=rho_Modulus,
         rho_WIMP=rho_WIMP,
         rho_Radiation=rho_Radiation,
         n_Axion=n_Axion,
-        hubble=hubble,
-        isOsc_Modulus=modIsOsc
-     )
+        hubble=hubble
+    )
 
     # with the solution of previous iteration, need to compute required properties for this step
     # compute temperature 
@@ -95,10 +80,66 @@ def build_Boltzmann_Equations(
     )
     
     # TODO: add in the first order eqns
-    print(temp)
-    print( rho_Modulus, rho_WIMP, energyDensities.rhoEQ_WIMP, n_Axion, rho_Radiation, hubble, zerothOrderEqns[0], zerothOrderEqns[1], zerothOrderEqns[2], zerothOrderEqns[3],)
-    print("")
-    return zerothOrderEqns
+
+    return zerothOrderEqns[0]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def build_Boltzmann_Jacobian( 
+    N, 
+    eqns, 
+    inputData
+):
+    # extract densities for modulus, WIMP, axion, and radiation, Hubble parameter, and ... first order ...
+    # use axion number density instead of energy density since rho=n*m, but number density does not need numerical calculation of dm/dN
+    rho_Modulus, rho_WIMP, n_Axion, rho_Radiation = eqns
+
+    hubble = np.sqrt( ( rho_Modulus + rho_WIMP + rho_Radiation ) / 3. ) / data.mPlanck
+
+    energyDensities = data.EnergyDensities( 
+        rho_Modulus=rho_Modulus,
+        rho_WIMP=rho_WIMP,
+        rho_Radiation=rho_Radiation,
+        n_Axion=n_Axion,
+        hubble=hubble
+    )
+
+    # with the solution of previous iteration, need to compute required properties for this step
+    # compute temperature 
+    temp = util.temperature( rho_Radiation=rho_Radiation, gstarCsvFile=inputData.gstarCsvFile )
+
+    # compute WIMP equilibrium energy density
+    energyDensities.rhoEQ_WIMP = zero.compute_rhoEquilibrium(temp, inputData.mass_WIMP)
+    # compute axion mass
+    mass_Axion = util.axionMass( fa=inputData.fa, temp=temp )
+
+    zerothOrderEqns = zero.build_zerothOrder_equations( 
+        inputData,
+        energyDensities,
+        mass_Axion, 
+        temp
+    )
+    
+    return zerothOrderEqns[1]
 
 
 
@@ -137,29 +178,31 @@ def solveBoltzmannEquations(
         inputData=inputData
     )
 
-    backend = "Radau"
+    kwargs = dict(method='bdf')
+    backend = "lsoda"
     ode_solver = ode(
-        build_Boltzmann_Equations
+        build_Boltzmann_Equations,
+        jac=build_Boltzmann_Jacobian
     ).set_integrator(
         backend,
-        max_step = 0.01,
-        rtol = 1e-8,
-        atol = 1e-8,
-        with_jacobian = True
+#        with_jacobian = True,
+        rtol=1e-6,
+        atol=1e-8,
+        **kwargs
     ).set_f_params(
+        inputData
+    ).set_jac_params(
         inputData
     )
     ode_solver.set_initial_value(y=y0, t=0.)
 
-    t = 0.
     dt = 0.1
 
     while True:
         # t=0 already set in initial condition, increment first
-        t += dt
-        y = ode_solver.integrate( t )
+        y = ode_solver.integrate( ode_solver.t + dt )
         print(y)
-        ode_solver.set_initial_value( y, t )
+        ode_solver.set_initial_value( y, ode_solver.t )
         # evolve until modulus is decayed
         if float(y[0]) < 1e-65:
             break

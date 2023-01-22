@@ -1,3 +1,5 @@
+import re
+from urllib import request
 import numpy as np
 import scipy.special
 from boltzmann import data
@@ -36,15 +38,19 @@ def build_modulus_energyDensity_eqn( inputData, energyDensities ):
     mass_Modulus = inputData.mass_Modulus
     hubble = energyDensities.hubble
     rho_Modulus = energyDensities.rho_Modulus
+    w_Modulus = util.compute_equationOfState_CohOsc( mass=mass_Modulus, hubble=hubble )
 
-    # if 3H >~ m, modulus oscillations have not begun yet - return 0 since still frozen
-    if not energyDensities.isOsc_Modulus:
-        return 0.
+    jacMod = [ 0., 0., 0., 0. ]
+
     # hubble dilution
-    dEdN = -3. * rho_Modulus
+    dEdN = -3. * rho_Modulus * ( 1. + w_Modulus )
+
     # decay
     dEdN -= decayWidth_Modulus * rho_Modulus / hubble
-    return dEdN
+
+    jacMod[ 0 ] = - ( 3. * ( 1. + w_Modulus ) + decayWidth_Modulus / hubble )
+
+    return [ dEdN, jacMod ]
 
 def build_WIMP_energyDensity_eqn( inputData, energyDensities, temp ):
     crossSection_WIMP = inputData.crossSection_WIMP
@@ -56,30 +62,41 @@ def build_WIMP_energyDensity_eqn( inputData, energyDensities, temp ):
     rhoEQ_WIMP = energyDensities.rhoEQ_WIMP
     rho_Modulus = energyDensities.rho_Modulus
 
+    w_WIMP = util.compute_equationOfStateWIMP( temp=temp, mass_WIMP=mass_WIMP )
+
+    jacWIMP = [ 0., 0., 0., 0. ]
+
     # hubble dilution
-    dEdN = -3. * rho_WIMP * ( 1. + util.compute_equationOfStateWIMP( temp=temp, mass_WIMP=mass_WIMP ) )
+    dEdN = -3. * rho_WIMP * ( 1. + w_WIMP )
+    jacWIMP[1] = - 3. * ( 1. + w_WIMP ) 
 
     # annihilations
     # annihilation term is numerically stiff - but equilibrium is an attractor
     # make approximation that WIMP is in equilibrium until close to freeze-out, Tf ~ mDM / 20
-
-#    if abs( rho_WIMP - rhoEQ_WIMP ) /rhoEQ_WIMP > 0.25:
-#    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
-    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ) or abs( rho_WIMP - rhoEQ_WIMP ) /rhoEQ_WIMP > 0.15:
+    if temp <= ( mass_WIMP / 20. ) and abs( rho_WIMP - rhoEQ_WIMP ) / rhoEQ_WIMP > 0.1:
         dEdN -= ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( hubble * mass_WIMP ) 
 
-    # injections - only apply if modulus is oscillating
-    if energyDensities.isOsc_Modulus:
-        dEdN += decayWidth_Modulus * rho_Modulus * branchRatio_ModulusToWIMP / hubble 
-    return dEdN
+#        rEQ = 0.
+#        if temp > 0.5 * ( mass_WIMP / 20. ):
+        rEQ = rhoEQ_WIMP
+
+        jacWIMP[1] -= 2. * ( rho_WIMP - rEQ ) * crossSection_WIMP / ( hubble * mass_WIMP )
+
+    # injections
+    dEdN += decayWidth_Modulus * rho_Modulus * branchRatio_ModulusToWIMP / hubble 
+    jacWIMP[0] = decayWidth_Modulus * branchRatio_ModulusToWIMP / hubble
+
+    return [ dEdN, jacWIMP ]
 
 def build_axion_numberDensity_eqn( mass_Axion, energyDensities ):
-    # if 3H >~ m(T), axion oscillations have not begun yet - return 0 since still frozen
-    if ( mass_Axion < 3. * energyDensities.hubble ):
-        return 0.
+    jacAxion = [ 0., 0., 0., 0. ]
+    w_Axion = util.compute_equationOfState_CohOsc( mass=mass_Axion, hubble=energyDensities.hubble )
+
     # hubble dilution 
-    dndN = -3. * energyDensities.n_Axion
-    return dndN
+    dndN = -3. * energyDensities.n_Axion * ( 1. + w_Axion )
+
+    jacAxion[2] = -3. * ( 1. + w_Axion )
+    return [ dndN, jacAxion ]
 
 def build_radiation_energyDensity_eqn( inputData, energyDensities, temp ):
     crossSection_WIMP = inputData.crossSection_WIMP
@@ -91,21 +108,26 @@ def build_radiation_energyDensity_eqn( inputData, energyDensities, temp ):
     rho_WIMP = energyDensities.rho_WIMP
     rhoEQ_WIMP = energyDensities.rhoEQ_WIMP
     rho_Modulus = energyDensities.rho_Modulus
+    jacRad = [ 0., 0., 0., 0. ]
 
     # hubble dilution
     dEdN = -4. * rho_Radiation
+    jacRad[3] = -4.
 
     # annihilations - again assume WIMP is in equilibrium until close to freeze-out
-#    if abs( rho_WIMP - rhoEQ_WIMP ) /rhoEQ_WIMP > 0.25:
-#    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
-    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ) or abs( rho_WIMP - rhoEQ_WIMP ) /rhoEQ_WIMP > 0.15:
+    if temp <= ( mass_WIMP / 20. ) and abs( rho_WIMP - rhoEQ_WIMP ) / rhoEQ_WIMP > 0.1:
         dEdN += ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( mass_WIMP * hubble )
+#        rEQ = 0.
+#        if temp > 0.5 * ( mass_WIMP / 20. ):
+        rEQ = rhoEQ_WIMP
 
-    # decays - only apply if modulus is oscillating
-    if energyDensities.isOsc_Modulus:
-        dEdN += decayWidth_Modulus * rho_Modulus * ( 1. - branchRatio_ModulusToWIMP ) / hubble
+        jacRad[1] += 2. * ( rho_WIMP - rEQ ) * crossSection_WIMP / ( hubble * mass_WIMP )
 
-    return dEdN
+    # decays
+    dEdN += decayWidth_Modulus * rho_Modulus * ( 1. - branchRatio_ModulusToWIMP ) / hubble
+    jacRad[0] = decayWidth_Modulus * ( 1. - branchRatio_ModulusToWIMP ) / hubble
+
+    return [ dEdN, jacRad ]
 
 
 # this helper method computes the zeroth order Boltzmann equations
@@ -120,5 +142,8 @@ def build_zerothOrder_equations(
     dnAx = build_axion_numberDensity_eqn( mass_Axion, energyDensities=energyDensities )
     dRhoRad = build_radiation_energyDensity_eqn( inputData=inputData, energyDensities=energyDensities, temp=temp )
 
-    return[ dRhoPhi, dRhoChi, dnAx, dRhoRad ]
+    eqs = [ dRhoPhi[0], dRhoChi[0], dnAx[0], dRhoRad[0] ]
+    jac = np.row_stack(( dRhoPhi[1], dRhoChi[1], dnAx[1], dRhoRad[1] ))
+
+    return [ eqs, jac ]
 
