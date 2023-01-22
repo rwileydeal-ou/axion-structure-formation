@@ -186,8 +186,9 @@ def solveBoltzmannEquations(
     ).set_integrator(
         backend,
 #        with_jacobian = True,
-        rtol=1e-6,
-        atol=1e-8,
+#        rtol=1e-10,
+#        atol=1e-10,
+        max_step=0.00005,
         **kwargs
     ).set_f_params(
         inputData
@@ -201,13 +202,17 @@ def solveBoltzmannEquations(
     while True:
         # t=0 already set in initial condition, increment first
         y = ode_solver.integrate( ode_solver.t + dt )
-        print(y)
-        ode_solver.set_initial_value( y, ode_solver.t )
+#        print(y)
+        ode_solver.set_initial_value( ode_solver.y, ode_solver.t )
+        tempTest = util.temperature( 
+            float(y[3]), 
+            gstarCsvFile = inputData.gstarCsvFile 
+        )
         # evolve until modulus is decayed
-        if float(y[0]) < 1e-65:
+        if float(y[0]) < 1e-85 and tempTest < 1e-4:
             break
 
-    temp = zero.temperature( 
+    temp = util.temperature( 
         float(y[3]), 
         gstarCsvFile = inputData.gstarCsvFile 
     )

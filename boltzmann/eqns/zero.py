@@ -73,14 +73,9 @@ def build_WIMP_energyDensity_eqn( inputData, energyDensities, temp ):
     # annihilations
     # annihilation term is numerically stiff - but equilibrium is an attractor
     # make approximation that WIMP is in equilibrium until close to freeze-out, Tf ~ mDM / 20
-    if temp <= ( mass_WIMP / 20. ) and abs( rho_WIMP - rhoEQ_WIMP ) / rhoEQ_WIMP > 0.1:
+    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
         dEdN -= ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( hubble * mass_WIMP ) 
-
-#        rEQ = 0.
-#        if temp > 0.5 * ( mass_WIMP / 20. ):
-        rEQ = rhoEQ_WIMP
-
-        jacWIMP[1] -= 2. * ( rho_WIMP - rEQ ) * crossSection_WIMP / ( hubble * mass_WIMP )
+        jacWIMP[1] -= 2. * rho_WIMP * crossSection_WIMP / ( hubble * mass_WIMP )
 
     # injections
     dEdN += decayWidth_Modulus * rho_Modulus * branchRatio_ModulusToWIMP / hubble 
@@ -115,13 +110,9 @@ def build_radiation_energyDensity_eqn( inputData, energyDensities, temp ):
     jacRad[3] = -4.
 
     # annihilations - again assume WIMP is in equilibrium until close to freeze-out
-    if temp <= ( mass_WIMP / 20. ) and abs( rho_WIMP - rhoEQ_WIMP ) / rhoEQ_WIMP > 0.1:
+    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
         dEdN += ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( mass_WIMP * hubble )
-#        rEQ = 0.
-#        if temp > 0.5 * ( mass_WIMP / 20. ):
-        rEQ = rhoEQ_WIMP
-
-        jacRad[1] += 2. * ( rho_WIMP - rEQ ) * crossSection_WIMP / ( hubble * mass_WIMP )
+        jacRad[1] += 2. * rho_WIMP * crossSection_WIMP / ( hubble * mass_WIMP )
 
     # decays
     dEdN += decayWidth_Modulus * rho_Modulus * ( 1. - branchRatio_ModulusToWIMP ) / hubble
