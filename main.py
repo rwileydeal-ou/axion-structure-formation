@@ -8,6 +8,7 @@ boltzmann.solveBoltzmannEquations(
     decayWidth_Modulus = 5e-20,
     branchRatio_ModulusToWIMP = 0.1,
     fa = 1e11,
+    thetaI = 3.113,
     temp_Reheat=1e12,
     gstarCsvFile = "mssm_gstar.csv"
 )

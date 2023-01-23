@@ -1,6 +1,7 @@
 import numpy as np
 from boltzmann.eqns import gstr
 from boltzmann.eqns import zero
+from boltzmann.eqns import util
 from boltzmann import data
 
 ################################################################
@@ -33,9 +34,15 @@ def compute_modulus_initialCondition(
 
 def compute_axion_initialCondition(
     inputData,
-    gstar
+    mass_Axion
 ):
-    return 0.
+    # domain wall number, in DFSZ case nDW=6
+    nDW = 6
+    fTheta = np.power( np.log( np.exp(1.) / (1. - np.power(inputData.thetaI / np.pi, 2.) ) ), 7./6. )
+    amplitude_SQR = 1.44 * np.power( inputData.fa * inputData.thetaI / nDW, 2. ) * fTheta
+
+    n0_Ax = 0.5 * mass_Axion * amplitude_SQR
+    return n0_Ax
 
 def compute_zerothOrder_initialConditions(
     inputData
@@ -50,7 +57,8 @@ def compute_zerothOrder_initialConditions(
     rho0_WIMP = zero.compute_rhoEquilibrium( temp=inputData.temp_Reheat, mass_WIMP=inputData.mass_WIMP )
 
     rho0_Modulus = compute_modulus_initialCondition( inputData=inputData, gstar=gstar )
-    n0_Axion = compute_axion_initialCondition( inputData=inputData, gstar=gstar )
+    massAxion = util.axionMass( fa=inputData.fa, temp=inputData.temp_Reheat )
+    n0_Axion = compute_axion_initialCondition( inputData=inputData, mass_Axion=massAxion )
 
     return [rho0_Modulus, rho0_WIMP, n0_Axion, rho0_Radiation]
 

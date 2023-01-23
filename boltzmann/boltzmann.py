@@ -53,24 +53,27 @@ def build_Boltzmann_Equations(
     # use axion number density instead of energy density since rho=n*m, but number density does not need numerical calculation of dm/dN
     rho_Modulus, rho_WIMP, n_Axion, rho_Radiation = eqns
 
-    hubble = np.sqrt( ( rho_Modulus + rho_WIMP + rho_Radiation ) / 3. ) / data.mPlanck
+    # with the solution of previous iteration, need to compute required properties for this step
+    # compute temperature 
+    temp = util.temperature( rho_Radiation=rho_Radiation, gstarCsvFile=inputData.gstarCsvFile )
+
+    # compute WIMP equilibrium energy density
+    rhoEQ_WIMP = zero.compute_rhoEquilibrium(temp, inputData.mass_WIMP)
+    # compute axion mass
+    mass_Axion = util.axionMass( fa=inputData.fa, temp=temp )
+
+    hubble = np.sqrt( 
+        ( rho_Modulus + rho_WIMP + rho_Radiation + n_Axion * mass_Axion ) / 3. 
+    ) / data.mPlanck
 
     energyDensities = data.EnergyDensities( 
         rho_Modulus=rho_Modulus,
         rho_WIMP=rho_WIMP,
         rho_Radiation=rho_Radiation,
         n_Axion=n_Axion,
+        rhoEQ_WIMP=rhoEQ_WIMP,
         hubble=hubble
     )
-
-    # with the solution of previous iteration, need to compute required properties for this step
-    # compute temperature 
-    temp = util.temperature( rho_Radiation=rho_Radiation, gstarCsvFile=inputData.gstarCsvFile )
-
-    # compute WIMP equilibrium energy density
-    energyDensities.rhoEQ_WIMP = zero.compute_rhoEquilibrium(temp, inputData.mass_WIMP)
-    # compute axion mass
-    mass_Axion = util.axionMass( fa=inputData.fa, temp=temp )
 
     zerothOrderEqns = zero.build_zerothOrder_equations( 
         inputData,
@@ -94,16 +97,6 @@ def build_Boltzmann_Equations(
 
 
 
-
-
-
-
-
-
-
-
-
-
 def build_Boltzmann_Jacobian( 
     N, 
     eqns, 
@@ -113,24 +106,27 @@ def build_Boltzmann_Jacobian(
     # use axion number density instead of energy density since rho=n*m, but number density does not need numerical calculation of dm/dN
     rho_Modulus, rho_WIMP, n_Axion, rho_Radiation = eqns
 
-    hubble = np.sqrt( ( rho_Modulus + rho_WIMP + rho_Radiation ) / 3. ) / data.mPlanck
+    # with the solution of previous iteration, need to compute required properties for this step
+    # compute temperature 
+    temp = util.temperature( rho_Radiation=rho_Radiation, gstarCsvFile=inputData.gstarCsvFile )
+
+    # compute WIMP equilibrium energy density
+    rhoEQ_WIMP = zero.compute_rhoEquilibrium(temp, inputData.mass_WIMP)
+    # compute axion mass
+    mass_Axion = util.axionMass( fa=inputData.fa, temp=temp )
+
+    hubble = np.sqrt( 
+        ( rho_Modulus + rho_WIMP + rho_Radiation + n_Axion * mass_Axion ) / 3. 
+    ) / data.mPlanck
 
     energyDensities = data.EnergyDensities( 
         rho_Modulus=rho_Modulus,
         rho_WIMP=rho_WIMP,
         rho_Radiation=rho_Radiation,
         n_Axion=n_Axion,
+        rhoEQ_WIMP=rhoEQ_WIMP,
         hubble=hubble
     )
-
-    # with the solution of previous iteration, need to compute required properties for this step
-    # compute temperature 
-    temp = util.temperature( rho_Radiation=rho_Radiation, gstarCsvFile=inputData.gstarCsvFile )
-
-    # compute WIMP equilibrium energy density
-    energyDensities.rhoEQ_WIMP = zero.compute_rhoEquilibrium(temp, inputData.mass_WIMP)
-    # compute axion mass
-    mass_Axion = util.axionMass( fa=inputData.fa, temp=temp )
 
     zerothOrderEqns = zero.build_zerothOrder_equations( 
         inputData,
@@ -158,6 +154,7 @@ def solveBoltzmannEquations(
     decayWidth_Modulus,
     branchRatio_ModulusToWIMP,
     fa,
+    thetaI,
     temp_Reheat,
     gstarCsvFile
 ):
@@ -169,6 +166,7 @@ def solveBoltzmannEquations(
         decayWidth_Modulus = decayWidth_Modulus,
         branchRatio_ModulusToWIMP = branchRatio_ModulusToWIMP,
         fa = fa,
+        thetaI = thetaI,
         temp_Reheat = temp_Reheat,
         gstarCsvFile = gstarCsvFile
     )
@@ -179,15 +177,11 @@ def solveBoltzmannEquations(
     )
 
     kwargs = dict(method='bdf')
-    backend = "lsoda"
     ode_solver = ode(
         build_Boltzmann_Equations,
         jac=build_Boltzmann_Jacobian
     ).set_integrator(
-        backend,
-#        with_jacobian = True,
-#        rtol=1e-10,
-#        atol=1e-10,
+        "lsoda",
         max_step=0.00005,
         **kwargs
     ).set_f_params(
@@ -203,11 +197,23 @@ def solveBoltzmannEquations(
         # t=0 already set in initial condition, increment first
         y = ode_solver.integrate( ode_solver.t + dt )
 #        print(y)
-        ode_solver.set_initial_value( ode_solver.y, ode_solver.t )
+
         tempTest = util.temperature( 
             float(y[3]), 
             gstarCsvFile = inputData.gstarCsvFile 
         )
+
+        mass_Axion = util.axionMass( inputData.fa, tempTest )
+        hubble = np.sqrt( 
+            ( y[0] + y[1] + y[3] + y[2] * mass_Axion ) / 3. 
+        ) / data.mPlanck
+
+        # update axion initial condition since m varies
+        if hubble >= mass_Axion:
+            y[2] = zeroIC.compute_axion_initialCondition( inputData=inputData, mass_Axion=mass_Axion )
+
+        # now update full set of ICs
+        ode_solver.set_initial_value( y, ode_solver.t )
         # evolve until modulus is decayed
         if float(y[0]) < 1e-85 and tempTest < 1e-4:
             break
@@ -216,9 +222,14 @@ def solveBoltzmannEquations(
         float(y[3]), 
         gstarCsvFile = inputData.gstarCsvFile 
     )
-    oh2 = compute_RelicDensity( 
+    oh2_WIMP = compute_RelicDensity( 
         float(y[1]), 
         temp=temp, 
         gstarCsvFile = inputData.gstarCsvFile 
     )
-    print(oh2)
+    oh2_Axion = compute_RelicDensity(
+        float(y[2]) * util.axionMass( inputData.fa, temp=temp ),
+        temp=temp,
+        gstarCsvFile = inputData.gstarCsvFile
+    )
+    print("Omega h^2, WIMP: \t", oh2_WIMP, "\nOmega h^2, Axion: \t", oh2_Axion, "\n")

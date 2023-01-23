@@ -17,6 +17,7 @@ class InputData:
     decayWidth_Modulus: float
     branchRatio_ModulusToWIMP: float
     fa: float
+    thetaI: float
     temp_Reheat: float
     gstarCsvFile: str
 
