@@ -1,3 +1,4 @@
+import csv
 import numpy as np
 import scipy.special
 from boltzmann.eqns import gstr as gStrReader
@@ -84,3 +85,15 @@ def compute_equationOfState_CohOsc( mass, hubble ):
     if mass < hubble:
         return -1.
     return 0.
+
+
+# this method retrieves list of ( mass, <sig.v> ) pairs from file
+def readCrossSectionMassPairsFromCSV( csVsMassCsvFile ):
+    mass_crossSection_Pairs = []
+    with open(csVsMassCsvFile, newline='\n', mode='r') as csvfile:
+        spamreader = csv.reader(csvfile, delimiter=',')
+        for row in spamreader:
+            if row[0][0] == '#':
+                continue
+            mass_crossSection_Pairs.append( [ float(row[0]), float(row[1]) ] )
+    return mass_crossSection_Pairs

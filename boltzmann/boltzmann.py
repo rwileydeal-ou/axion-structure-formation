@@ -3,6 +3,7 @@ from ctypes import util
 from turtle import back
 import matplotlib as mpl
 import numpy as np
+import csv
 from scipy.integrate import ode
 from scipy.integrate import Radau
 from boltzmann import data
@@ -156,7 +157,8 @@ def solveBoltzmannEquations(
     fa,
     thetaI,
     temp_Reheat,
-    gstarCsvFile
+    gstarCsvFile,
+    outputCsv
 ):
     # define input data object first    
     inputData = data.InputData( 
@@ -235,4 +237,8 @@ def solveBoltzmannEquations(
         temp=temp,
         gstarCsvFile = inputData.gstarCsvFile
     )
-    print("Omega h^2, WIMP: \t", oh2_WIMP, "\nOmega h^2, Axion: \t", oh2_Axion, "\n")
+
+    with open(outputCsv, 'a', newline='') as f:
+        writer = csv.writer(f) 
+        writer.writerow( [ mass_Modulus, mass_WIMP, crossSection_WIMP, oh2_WIMP, oh2_Axion ] ) 
+

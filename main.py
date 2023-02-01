@@ -1,8 +1,10 @@
 import numpy as np
 from boltzmann import data
 from boltzmann import boltzmann
+from boltzmann.eqns import util
 
-# NOTE: ALL DIMENSIONFUL VALUES SHOULD HAVE BASE UNITS OF GEV
+
+# define the moduli masses we want to use
 mPhis = [
     8.e4,
     9.e4,
@@ -21,20 +23,37 @@ mPhis = [
     4.e6,
     5.e6,
 ]
-for mPhi in mPhis:
-    br = 0.05
+mPhis.reverse()
 
-    c = 25. + 2.5
+# define the branching fraction we want to use
+br = 0.05
+
+# define the effective coupling in the modulus decay width
+# c for Gamma_phi = (c / 48pi) * mphi^3/mP^2
+c = 25. + 2.5
+
+
+# pull WIMP masses and cross sections from file
+wimp_data = util.readCrossSectionMassPairsFromCSV( "fermiLAT_TauTau.csv" )
+
+# NOTE: ALL DIMENSIONFUL VALUES SHOULD HAVE BASE UNITS OF GEV
+for mPhi in mPhis:
+    print( mPhi)
     Gamma_Phi = c * np.power( mPhi, 3. ) / ( 48. * np.pi * np.power( data.mPlanck, 2. ) )
-    print( mPhi )
-    boltzmann.solveBoltzmannEquations(
-        mass_Modulus=mPhi,
-        mass_WIMP=200., 
-        crossSection_WIMP=1.93e-08,
-        decayWidth_Modulus = Gamma_Phi,
-        branchRatio_ModulusToWIMP = br,
-        fa = 1e11,
-        thetaI = 3.113,
-        temp_Reheat=1e12,
-        gstarCsvFile = "mssm_gstar.csv"
-    )
+
+    for wimp in wimp_data:
+        mDM = wimp[0]
+        crossSection = wimp[1]
+
+        boltzmann.solveBoltzmannEquations(
+            mass_Modulus = mPhi,
+            mass_WIMP    = mDM,
+            crossSection_WIMP  = crossSection,
+            decayWidth_Modulus = Gamma_Phi,
+            branchRatio_ModulusToWIMP = br,
+            fa           = 1e11,
+            thetaI       = 3.113,
+            temp_Reheat  = 1e12,
+            gstarCsvFile = "mssm_gstar.csv",
+            outputCsv    = "testOutput.csv"
+        )
