@@ -182,7 +182,10 @@ def solveBoltzmannEquations(
         jac=build_Boltzmann_Jacobian
     ).set_integrator(
         "lsoda",
-        max_step=0.00005,
+        nsteps=10000,
+        atol=1e-6,
+        rtol=1e-6,
+        max_step=0.0001,
         **kwargs
     ).set_f_params(
         inputData
@@ -196,7 +199,7 @@ def solveBoltzmannEquations(
     while True:
         # t=0 already set in initial condition, increment first
         y = ode_solver.integrate( ode_solver.t + dt )
-#        print(y)
+        print(y)
 
         tempTest = util.temperature( 
             float(y[3]), 

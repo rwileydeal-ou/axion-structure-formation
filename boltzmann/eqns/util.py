@@ -59,11 +59,24 @@ def temperature( rho_Radiation, gstarCsvFile ):
 def compute_equationOfStateWIMP( temp, mass_WIMP ):
     if ( temp <= mass_WIMP / 10. ):
         return 0
-    elif ( temp < 1.5 * mass_WIMP and temp > mass_WIMP / 10. ):
+    elif ( temp <= mass_WIMP / 5. and temp > mass_WIMP / 10. ):
+        f1 = mass_WIMP * scipy.special.kn(1, mass_WIMP / temp) / scipy.special.kn(2, mass_WIMP / temp) / temp 
+        f2 = 3.
+        w2 = 1 / ( f1 + f2 )
+        wEST = 0. + ( w2 ) / 0.1 * ( temp / mass_WIMP - 0.1 )
+        return wEST
+    elif ( temp < 1. * mass_WIMP and temp > mass_WIMP / 5. ):
         # intermediate regime
         f1 = mass_WIMP * scipy.special.kn(1, mass_WIMP / temp) / scipy.special.kn(2, mass_WIMP / temp) / temp 
         f2 = 3.
         return 1 / ( f1 + f2 )
+    elif ( temp >= 1. * mass_WIMP and temp < 1.5 * mass_WIMP ):
+        f1 = mass_WIMP * scipy.special.kn(1, mass_WIMP / temp) / scipy.special.kn(2, mass_WIMP / temp) / temp 
+        f2 = 3.
+        w2 = 1 / ( f1 + f2 )
+        
+        wEST = w2 + ( 1./3. - w2 ) / 0.5 * ( temp / mass_WIMP - 1. )
+        return wEST
     elif ( temp >= 1.5 * mass_WIMP  ):
         return 1./3.
 

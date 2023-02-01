@@ -20,6 +20,7 @@ class InputData:
     thetaI: float
     temp_Reheat: float
     gstarCsvFile: str
+    turnOnAnnihilations: bool = False
 
 @dataclasses.dataclass
 class EnergyDensities:

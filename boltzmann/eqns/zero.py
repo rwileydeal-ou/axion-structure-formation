@@ -22,12 +22,33 @@ def compute_rhoEquilibrium( temp, mass_WIMP ):
         # non-relativistic limit
         neq = g * np.power( mass_WIMP * temp / (2. * np.pi), 1.5 ) * np.exp( - mass_WIMP / temp )
         return neq * mass_WIMP
-    elif ( temp < 1.5 * mass_WIMP and temp > mass_WIMP / 10. ):
+    elif ( temp <= mass_WIMP / 5. and temp > mass_WIMP / 10. ):
+        # compute both sides, then average to ensure smooth transition
+        rhoEQ1 = mass_WIMP * g * np.power( mass_WIMP * temp / (2. * np.pi), 1.5 ) * np.exp( - mass_WIMP / temp )
+        
+        neq = g * np.power(mass_WIMP, 2.) * temp * scipy.special.kn(2, mass_WIMP / temp) / ( 2. * np.power(np.pi, 2.) )
+        f1 = mass_WIMP * scipy.special.kn(1, mass_WIMP / temp) / scipy.special.kn(2, mass_WIMP / temp)
+        f2 = 3. * temp 
+        rhoEQ2 = neq * ( f1 + f2 )
+
+        rhoEST = rhoEQ1 + ( rhoEQ2 - rhoEQ1 ) / 0.1 * ( temp / mass_WIMP - 0.1 )
+        return rhoEST
+    elif ( temp < 1. * mass_WIMP and temp > mass_WIMP / 5. ):
         # intermediate regime
         neq = g * np.power(mass_WIMP, 2.) * temp * scipy.special.kn(2, mass_WIMP / temp) / ( 2. * np.power(np.pi, 2.) )
         f1 = mass_WIMP * scipy.special.kn(1, mass_WIMP / temp) / scipy.special.kn(2, mass_WIMP / temp)
         f2 = 3. * temp 
         return neq * ( f1 + f2 )
+    elif ( temp >= 1. * mass_WIMP and temp < 1.5 * mass_WIMP ):
+        rhoEQ1 = g * 7./8. * np.power(np.pi, 2.) / 30. * np.power( temp, 4. )
+        
+        neq = g * np.power(mass_WIMP, 2.) * temp * scipy.special.kn(2, mass_WIMP / temp) / ( 2. * np.power(np.pi, 2.) )
+        f1 = mass_WIMP * scipy.special.kn(1, mass_WIMP / temp) / scipy.special.kn(2, mass_WIMP / temp)
+        f2 = 3. * temp 
+        rhoEQ2 = neq * ( f1 + f2 )
+
+        rhoEST = rhoEQ2 + ( rhoEQ1 - rhoEQ2 ) / 0.5 * ( temp / mass_WIMP - 1. )
+        return rhoEST
     elif ( temp >= 1.5 * mass_WIMP  ):
         # relativistic limit 
         return g * 7./8. * np.power(np.pi, 2.) / 30. * np.power( temp, 4. )
@@ -73,9 +94,10 @@ def build_WIMP_energyDensity_eqn( inputData, energyDensities, temp ):
     # annihilations
     # annihilation term is numerically stiff - but equilibrium is an attractor
     # make approximation that WIMP is in equilibrium until close to freeze-out, Tf ~ mDM / 20
-    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
+    if temp <= 1.5 * mass_WIMP or inputData.turnOnAnnihilations:
         dEdN -= ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( hubble * mass_WIMP ) 
         jacWIMP[1] -= 2. * rho_WIMP * crossSection_WIMP / ( hubble * mass_WIMP )
+        inputData.turnOnAnnihilations = True 
 
     # injections
     dEdN += decayWidth_Modulus * rho_Modulus * branchRatio_ModulusToWIMP / hubble 
@@ -110,9 +132,11 @@ def build_radiation_energyDensity_eqn( inputData, energyDensities, temp ):
     jacRad[3] = -4.
 
     # annihilations - again assume WIMP is in equilibrium until close to freeze-out
-    if temp <= 20. * 1.5 * ( mass_WIMP / 20. ):
+#    if np.abs( np.power( rho_WIMP, 2. ) - np.power( rhoEQ_WIMP, 2. ) ) / np.power( rhoEQ_WIMP, 2. ) > 0.25:
+    if temp <= 1.5 * mass_WIMP or inputData.turnOnAnnihilations:
         dEdN += ( np.power(rho_WIMP, 2.) - np.power(rhoEQ_WIMP, 2.) ) * crossSection_WIMP / ( mass_WIMP * hubble )
         jacRad[1] += 2. * rho_WIMP * crossSection_WIMP / ( hubble * mass_WIMP )
+        inputData.turnOnAnnihilations = True 
 
     # decays
     dEdN += decayWidth_Modulus * rho_Modulus * ( 1. - branchRatio_ModulusToWIMP ) / hubble
