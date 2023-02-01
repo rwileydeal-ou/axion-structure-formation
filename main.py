@@ -23,7 +23,6 @@ mPhis = [
 ]
 for mPhi in mPhis:
     br = 0.05
-    mPhi = 5e7
 
     c = 25. + 2.5
     Gamma_Phi = c * np.power( mPhi, 3. ) / ( 48. * np.pi * np.power( data.mPlanck, 2. ) )
@@ -39,4 +38,3 @@ for mPhi in mPhis:
         temp_Reheat=1e12,
         gstarCsvFile = "mssm_gstar.csv"
     )
-    break

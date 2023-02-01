@@ -199,7 +199,7 @@ def solveBoltzmannEquations(
     while True:
         # t=0 already set in initial condition, increment first
         y = ode_solver.integrate( ode_solver.t + dt )
-        print(y)
+#        print(y)
 
         tempTest = util.temperature( 
             float(y[3]), 
