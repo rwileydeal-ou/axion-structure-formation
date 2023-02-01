@@ -43,7 +43,8 @@ for mPhi in mPhis:
 
     for wimp in wimp_data:
         mDM = wimp[0]
-        crossSection = wimp[1]
+        # convert from cm^3 /s to GeV^-2
+        crossSection = wimp[1] * ( 1./3. * 1.e17)
 
         boltzmann.solveBoltzmannEquations(
             mass_Modulus = mPhi,
