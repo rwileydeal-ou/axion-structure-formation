@@ -187,7 +187,7 @@ def solveBoltzmannEquations(
         nsteps=10000,
         atol=1e-6,
         rtol=1e-6,
-        max_step=0.0001,
+        max_step=0.00005,
         **kwargs
     ).set_f_params(
         inputData
