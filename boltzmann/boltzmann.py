@@ -185,9 +185,9 @@ def solveBoltzmannEquations(
     ).set_integrator(
         "lsoda",
         nsteps=10000,
-        atol=1e-6,
-        rtol=1e-6,
-        max_step=0.00005,
+        atol=1e-12,
+        rtol=1e-12,
+        max_step=0.000001,
         **kwargs
     ).set_f_params(
         inputData
@@ -201,7 +201,7 @@ def solveBoltzmannEquations(
     while True:
         # t=0 already set in initial condition, increment first
         y = ode_solver.integrate( ode_solver.t + dt )
-#        print(y)
+        print(y)
 
         tempTest = util.temperature( 
             float(y[3]), 
