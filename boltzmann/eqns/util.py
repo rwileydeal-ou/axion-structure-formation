@@ -46,7 +46,7 @@ def temperature( rho_Radiation, gstarCsvFile ):
     deltaTemp = 0.
 
     while ( np.abs( temp0 - temp1 ) / temp0 > 0.01 ):
-        gstr = gStrReader.readGstarFromCSV( gstarCsvFile, temp0 )
+        gstr = gStrReader.readGstarFromData( gstarCsvFile, temp0 )
         temp1 = np.power( 30. * rho_Radiation / ( gstr * np.power(np.pi, 2.) ), 0.25 )
 
         if ( np.abs( temp0 - temp1) == deltaTemp ):
@@ -97,3 +97,15 @@ def readCrossSectionMassPairsFromCSV( csVsMassCsvFile ):
                 continue
             mass_crossSection_Pairs.append( [ float(row[0]), float(row[1]) ] )
     return mass_crossSection_Pairs
+
+# this method retrieves list of ( mass, <sig.v> ) pairs from file
+def readInputDataFromCSV( inputCsvFile ):
+    inputData = []
+    with open(inputCsvFile, newline='\n', mode='r') as csvfile:
+        spamreader = csv.reader(csvfile, delimiter=',')
+        for row in spamreader:
+            if row[0][0] == '#':
+                continue
+            inputData.append( [ float(row[0]), float(row[1]), float(row[2]) ] )
+    return inputData
+

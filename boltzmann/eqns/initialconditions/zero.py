@@ -48,7 +48,7 @@ def compute_zerothOrder_initialConditions(
     inputData
 ):
     # read gstar once
-    gstar = gstr.readGstarFromCSV( gstarCsvFile=inputData.gstarCsvFile, temp=inputData.temp_Reheat )
+    gstar = gstr.readGstarFromData( gstarCsvData=inputData.gstarCsvFile, temp=inputData.temp_Reheat )
 
     hubble0 = compute_hubble_initialCondition( inputData=inputData, gstar=gstar )
     rho0_Radiation = compute_radiation_initialCondition( inputData=inputData, gstar=gstar )

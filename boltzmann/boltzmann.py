@@ -21,7 +21,7 @@ def compute_RelicDensity(
     temp_0 = 2.34816e-13
     gstarEntropic_0 = 3.90909090909091
 
-    gstarEntropic = gstr.readGstarFromCSV( gstarCsvFile=gstarCsvFile, temp=temp )
+    gstarEntropic = gstr.readGstarFromData( gstarCsvData=gstarCsvFile, temp=temp )
 
     oh2 = rho * ( gstarEntropic_0 / gstarEntropic ) * np.power( temp_0 / temp, 3. ) / rhoCr_0
     return oh2
@@ -160,6 +160,8 @@ def solveBoltzmannEquations(
     gstarCsvFile,
     outputCsv
 ):
+    gstrData = gstr.pullGstarFromCSV( gstarCsvFile=gstarCsvFile )
+
     # define input data object first    
     inputData = data.InputData( 
         mass_Modulus = mass_Modulus, 
@@ -170,7 +172,7 @@ def solveBoltzmannEquations(
         fa = fa,
         thetaI = thetaI,
         temp_Reheat = temp_Reheat,
-        gstarCsvFile = gstarCsvFile
+        gstarCsvFile = gstrData
     )
 
     # define initial conditions
@@ -183,11 +185,11 @@ def solveBoltzmannEquations(
         build_Boltzmann_Equations,
         jac=build_Boltzmann_Jacobian
     ).set_integrator(
-        "lsoda",
-        nsteps=10000,
-        atol=1e-12,
-        rtol=1e-12,
-        max_step=0.000001,
+        "vode",
+        nsteps=20000,
+        atol=1e-8,
+        rtol=1e-8,
+        max_step=0.0001,
         **kwargs
     ).set_f_params(
         inputData
