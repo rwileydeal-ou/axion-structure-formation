@@ -7,6 +7,9 @@ from boltzmann.eqns import gstr as gStrReader
 # this method computes axion mass based on current temperature (in GeV) and axion decay constant (in GeV)
 def axionMass(fa, temp):
     m = np.power(0.078, 2.) / fa
+    if temp == 0.:
+        temp = 0.001
+    return min( m, ( np.power(0.2 / temp, 4.) * 0.018 * m ) )
 
     if (temp <= 0.2 ):
         return m

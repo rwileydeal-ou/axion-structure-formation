@@ -1,3 +1,4 @@
+import sys
 from cmath import nan
 from ctypes import util
 from turtle import back
@@ -189,7 +190,7 @@ def solveBoltzmannEquations(
         nsteps=20000,
         atol=1e-8,
         rtol=1e-8,
-        max_step=0.0001,
+        max_step=0.00005,
         **kwargs
     ).set_f_params(
         inputData
@@ -198,12 +199,11 @@ def solveBoltzmannEquations(
     )
     ode_solver.set_initial_value(y=y0, t=0.)
 
-    dt = 0.1
+    dt = 0.05
 
     while True:
         # t=0 already set in initial condition, increment first
         y = ode_solver.integrate( ode_solver.t + dt )
-        print(y)
 
         tempTest = util.temperature( 
             float(y[3]), 
@@ -214,6 +214,9 @@ def solveBoltzmannEquations(
         hubble = np.sqrt( 
             ( y[0] + y[1] + y[3] + y[2] * mass_Axion ) / 3. 
         ) / data.mPlanck
+
+#        sys.stdout.write(
+#            str(ode_solver.t+dt) + '\t' + str(y[0]) + '\t' + str(y[1]) + '\t' + str(y[2]) + '\t' + str(y[3]) + '\t' + str(mass_Axion) + '\t' + str(tempTest) + '\t' + str(hubble) + "\n")
 
         # update axion initial condition since m varies
         if hubble >= mass_Axion:

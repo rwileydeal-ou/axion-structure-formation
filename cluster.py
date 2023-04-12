@@ -5,7 +5,7 @@ from boltzmann import boltzmann
 from boltzmann.eqns import util
 
 
-def doWork(mPhi, br, percentDM, outFile):
+def doWork(mPhi, fa, percentDM, br, outFile):
     # define the effective coupling in the modulus decay width
     # c for Gamma_phi = (c / 48pi) * mphi^3/mP^2
     c = 25. + 2.5
@@ -18,6 +18,11 @@ def doWork(mPhi, br, percentDM, outFile):
 
     for wimp in wimp_data:
         mDM = wimp[0]
+
+        # bail early 
+        if abs(mDM - 200.) > 0.1:
+            continue
+
         # convert from cm^3 /s to GeV^-2
         crossSection = wimp[1] * ( 1./3. * 1.e17) / np.power( percentDM, 2. ) # divide by xi^2 since constraint is fitted from data
 
@@ -27,7 +32,7 @@ def doWork(mPhi, br, percentDM, outFile):
             crossSection_WIMP  = crossSection,
             decayWidth_Modulus = Gamma_Phi,
             branchRatio_ModulusToWIMP = br,
-            fa           = 1e11,
+            fa           = fa,
             thetaI       = 3.113,
             temp_Reheat  = 1e12,
             gstarCsvFile = "mssm_gstar.csv",
@@ -40,5 +45,5 @@ outFile = sys.argv[2]
 inData = util.readInputDataFromCSV( inScript )
 
 for d in inData:
-    doWork( d[0], d[1], d[2], outFile )
+    doWork( d[0], d[1], 0.1, 0.005, outFile )
 
